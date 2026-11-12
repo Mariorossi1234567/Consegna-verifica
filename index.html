@@ -1,0 +1,160 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Correttore – Verifica di analisi logica</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2433;--mut:#5b6577;--line:#d5dae3;--acc:#24509b;--ok:#1e7a46;--okb:#e6f4ec;--ko:#b3261e;--kob:#fbe9e7}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141821;--card:#1c2230;--ink:#e8ebf2;--mut:#9aa4b8;--line:#333f57;--acc:#8fb1ee;--ok:#6fd39b;--okb:#17301f;--ko:#ff9a92;--kob:#3a1c1a}}
+:root[data-theme="dark"]{--bg:#141821;--card:#1c2230;--ink:#e8ebf2;--mut:#9aa4b8;--line:#333f57;--acc:#8fb1ee;--ok:#6fd39b;--okb:#17301f;--ko:#ff9a92;--kob:#3a1c1a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+main{max-width:980px;margin:0 auto}
+h1{font:700 1.6rem Georgia,serif;margin:.2em 0}h2{font:700 1.2rem Georgia,serif;margin:1.2em 0 .5em}
+.box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.box p{margin:.3em 0;color:var(--mut)}
+textarea{width:100%;font:.9rem monospace;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+button{font:inherit;font-weight:600;padding:8px 16px;border-radius:6px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer;margin:6px 8px 0 0}
+button.s{background:transparent;color:var(--acc)}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+button:disabled{opacity:.5;cursor:default}
+.err{color:var(--ko);font-weight:600}
+table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden;min-width:80px}.bar i{display:block;height:100%;background:var(--ok)}
+.kpi{display:flex;gap:24px;flex-wrap:wrap}.kpi div{min-width:120px}.kpi b{display:block;font:700 1.8rem Georgia,serif}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;break-inside:avoid}
+.card h3{margin:0 0 8px;font-size:1rem;color:var(--acc)}
+.fr{display:flex;flex-wrap:wrap;gap:8px}
+.blk{border:2px solid var(--line);border-radius:8px;padding:6px 8px;min-width:120px;max-width:230px}
+.blk.ok{border-color:var(--ok);background:var(--okb)}.blk.ko{border-color:var(--ko);background:var(--kob)}
+.blk .t{display:block;font:1.02rem Georgia,serif}
+.blk .a{display:block;font-size:.82rem;color:var(--mut)}
+.blk .m{float:right;font-weight:700;margin-left:6px}.blk.ok .m{color:var(--ok)}.blk.ko .m{color:var(--ko)}
+.blk .c{display:block;font-size:.8rem;color:var(--ok);font-weight:600;margin-top:2px}
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 16px}
+.cats div{display:flex;justify-content:space-between;gap:8px;font-size:.9rem;border-bottom:1px dotted var(--line)}
+.cats .w{color:var(--ko);font-weight:600}
+.set{margin-top:10px;font-size:.9rem;color:var(--mut)}.set input[type=number]{width:64px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.hide{display:none}
+@media print{body{background:#fff;color:#000;padding:0}.noprint,#list,#inp{display:none!important}#detail{display:block!important}.card,.blk{break-inside:avoid}}
+</style></head><body><main>
+<h1>Correttore – Verifica di analisi logica</h1>
+<div class="box noprint" id="inp">
+<p>Incolla qui i codici consegnati dagli alunni, <b>uno per riga</b>, così come li hanno ricevuti (ad esempio <i>Marco R. | abcd…</i>).</p>
+<textarea id="in" rows="6" placeholder="Marco R. | bdfhj…&#10;Giulia M. | bdfhj…"></textarea>
+<button id="go">Correggi</button><button class="s" id="clr">Svuota</button>
+<div class="set"><b>Come calcolo il voto:</b> sufficienza (6) al <input id="soglia" type="number" min="30" max="95" value="60" aria-label="Percentuale per la sufficienza">% di risposte corrette · voto minimo <input id="vmin" type="number" min="0" max="6" step="0.5" value="4" aria-label="Voto minimo"> · <label><input type="checkbox" id="rnd" checked> arrotonda al mezzo punto</label></div>
+<div id="msg" class="err"></div></div>
+<div id="list" class="hide"></div>
+<div id="detail" class="hide"></div>
+</main>
+<script>
+const L={S:"Soggetto",PV:"Predicato verbale",PN:"Predicato nominale",O:"Compl. oggetto",Sp:"Compl. di specificazione",D:"Compl. di denominazione",T:"Compl. di termine",Pt:"Compl. partitivo",Ag:"Compl. d'agente",Ce:"Compl. di causa efficiente",C:"Compl. di causa",F:"Compl. di fine",Mz:"Compl. di mezzo",Md:"Compl. di modo",Cp:"Compl. di compagnia o unione",Ls:"Compl. di luogo (stato in luogo)",La:"Compl. di luogo (moto a luogo)",Ld:"Compl. di luogo (moto da luogo)",Lp:"Compl. di luogo (moto per luogo)",Td:"Compl. di tempo determinato",Tc:"Compl. di tempo continuato",Ar:"Compl. di argomento",Li:"Compl. di limitazione",Pa:"Compl. di paragone",Ma:"Compl. di materia",Q:"Compl. di qualità",Ab:"Compl. di abbondanza",Pr:"Compl. di privazione",St:"Compl. di stima",Pz:"Compl. di prezzo",Et:"Compl. di età",Ps:"Compl. predicativo del soggetto",Pe:"Compl. di peso",Es:"Compl. di estensione",Di:"Compl. di distanza",Al:"Compl. di allontanamento o separazione"};
+const SENT=[{"n": 1, "p": [["Mio nonno", "S"], ["a ottant'anni", "Et"], ["cammina", "PV"], ["per tre chilometri", "Es"], ["ogni mattina", "Td"]]}, {"n": 2, "p": [["Il corriere", "S"], ["ha consegnato", "PV"], ["un pacco", "O"], ["da cinque chili", "Pe"], ["a Marco", "T"], ["ieri", "Td"]]}, {"n": 3, "p": [["La scuola", "S"], ["si trova", "PV"], ["in campagna", "Ls"], ["a due chilometri", "Di"], ["da casa mia", "Al"]]}, {"n": 4, "p": [["Il bosco", "S"], ["si estende", "PV"], ["per due ettari", "Es"], ["ai piedi", "Ls"], ["della montagna", "Sp"]]}, {"n": 5, "p": [["Mia sorella", "S"], ["è più brava", "PN"], ["di me", "Pa"], ["in storia", "Li"], ["quest'anno", "Td"]]}, {"n": 6, "p": [["Il gioielliere", "S"], ["ha venduto", "PV"], ["un anello", "O"], ["d'oro", "Ma"], ["a mille euro", "Pz"], ["al cliente", "T"]]}, {"n": 7, "p": [["Il perito", "S"], ["ha stimato", "PV"], ["un quadro", "O"], ["di grande valore", "Q"], ["a duemila euro", "St"]]}, {"n": 8, "p": [["Il professore", "S"], ["parla", "PV"], ["della Resistenza", "Ar"], ["agli studenti", "T"], ["per un'ora", "Tc"]]}, {"n": 9, "p": [["Luca", "S"], ["è più bravo", "PN"], ["di Marco", "Pa"], ["in geografia", "Li"]]}, {"n": 10, "p": [["Una ragazza", "S"], ["dai capelli biondi", "Q"], ["compra", "PV"], ["un maglione", "O"], ["di lana", "Ma"], ["a trenta euro", "Pz"]]}, {"n": 11, "p": [["Un ragazzo", "S"], ["dagli occhi verdi", "Q"], ["discute", "PV"], ["del progetto", "Ar"], ["con la preside", "Cp"]]}, {"n": 12, "p": [["Gli esperti", "S"], ["hanno stimato", "PV"], ["il castello", "O"], ["a dieci milioni", "St"], ["nel 2018", "Td"]]}, {"n": 13, "p": [["Il paese", "S"], ["di mia nonna", "Sp"], ["dista", "PV"], ["venti chilometri", "Di"], ["da Bologna", "Al"]]}, {"n": 14, "p": [["Il viaggiatore", "S"], ["porta", "PV"], ["uno zaino", "O"], ["del peso di dodici chili", "Pe"], ["sulle spalle", "Ls"]]}, {"n": 15, "p": [["Mia madre", "S"], ["ha comprato", "PV"], ["una sciarpa", "O"], ["di seta", "Ma"], ["dai colori vivaci", "Q"], ["a venti euro", "Pz"]]}, {"n": 16, "p": [["Marco", "S"], ["a quindici anni", "Et"], ["porta", "PV"], ["uno zaino", "O"], ["da dieci chili", "Pe"], ["a scuola", "La"]]}, {"n": 17, "p": [["Gli operai", "S"], ["hanno costruito", "PV"], ["un ponte", "O"], ["in ferro", "Ma"], ["durante l'estate", "Tc"], ["con grande cura", "Md"]]}, {"n": 18, "p": [["L'antiquario", "S"], ["ha valutato", "PV"], ["il vaso", "O"], ["cinquecento euro", "St"], ["con una lente", "Mz"]]}, {"n": 19, "p": [["Il negoziante", "S"], ["vende", "PV"], ["il pane", "O"], ["a due euro", "Pz"], ["ai clienti", "T"], ["ogni mattina", "Td"]]}, {"n": 20, "p": [["Questa borsa", "S"], ["di pelle", "Ma"], ["è più cara", "PN"], ["della mia", "Pa"]]}, {"n": 21, "p": [["Il maestro", "S"], ["racconta", "PV"], ["una storia", "O"], ["sui pirati", "Ar"], ["agli alunni", "T"]]}, {"n": 22, "p": [["Mio zio", "S"], ["a vent'anni", "Et"], ["ha camminato", "PV"], ["per trenta chilometri", "Es"], ["verso il mare", "La"]]}, {"n": 23, "p": [["Il pacco", "S"], ["dello zio", "Sp"], ["pesa", "PV"], ["tre chili", "Pe"]]}, {"n": 24, "p": [["La casa", "S"], ["dei nonni", "Sp"], ["si trova", "PV"], ["a trenta chilometri", "Di"], ["dal mare", "Al"], ["in campagna", "Ls"]]}, {"n": 25, "p": [["Il bambino", "S"], ["a sette anni", "Et"], ["è molto bravo", "PN"], ["nel disegno", "Li"]]}, {"n": 26, "p": [["L'orologio", "S"], ["d'argento", "Ma"], ["costa", "PV"], ["cento euro", "Pz"], ["in negozio", "Ls"]]}, {"n": 27, "p": [["I periti", "S"], ["hanno valutato", "PV"], ["una collezione", "O"], ["di grande pregio", "Q"], ["a tre milioni", "St"]]}, {"n": 28, "p": [["Giulia", "S"], ["è più veloce", "PN"], ["di me", "Pa"], ["nella corsa", "Li"]]}, {"n": 29, "p": [["Il rifugio", "S"], ["si trova", "PV"], ["a venti chilometri", "Di"], ["dal paese", "Al"], ["in alta montagna", "Ls"]]}, {"n": 30, "p": [["Mia nonna", "S"], ["ha", "PV"], ["una collana", "O"], ["d'oro", "Ma"], ["di grande pregio", "Q"], ["da molti anni", "Tc"]]}, {"n": 31, "p": [["Il corridore", "S"], ["porta", "PV"], ["uno zaino", "O"], ["da otto chili", "Pe"], ["per dieci chilometri", "Es"], ["lungo il fiume", "Lp"]]}, {"n": 32, "p": [["La scuola", "S"], ["di mio fratello", "Sp"], ["dista", "PV"], ["due chilometri", "Di"], ["dal centro", "Al"]]}, {"n": 33, "p": [["Il notaio", "S"], ["valuta", "PV"], ["la villa", "O"], ["un milione di euro", "St"], ["con attenzione", "Md"]]}, {"n": 34, "p": [["Il bambino", "S"], ["ha pagato", "PV"], ["il gelato", "O"], ["due euro", "Pz"], ["al gelataio", "T"]]}, {"n": 35, "p": [["Il museo", "S"], ["ha acquistato", "PV"], ["un vaso", "O"], ["di porcellana", "Ma"], ["per mille euro", "Pz"], ["nel 2019", "Td"]]}, {"n": 36, "p": [["Una signora", "S"], ["dai capelli bianchi", "Q"], ["racconta", "PV"], ["ai nipoti", "T"], ["una storia", "O"], ["sul mare", "Ar"]]}, {"n": 37, "p": [["Mia nonna", "S"], ["a novant'anni", "Et"], ["è molto lucida", "PN"], ["nei ricordi", "Li"]]}, {"n": 38, "p": [["Il mio zaino", "S"], ["di tela", "Ma"], ["è più caro", "PN"], ["del tuo", "Pa"]]}, {"n": 39, "p": [["Un ragazzo", "S"], ["di quindici anni", "Et"], ["corre", "PV"], ["per dieci chilometri", "Es"], ["ogni sera", "Td"]]}, {"n": 40, "p": [["La professoressa", "S"], ["racconta", "PV"], ["agli alunni", "T"], ["di Cipro", "Ar"], ["per due ore", "Tc"], ["in aula magna", "Ls"]]}];
+const K=Object.keys(L),TOT=SENT.reduce((n,s)=>n+s.p.length,0);
+const ALPH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",SEED=0x3C6EF372,SALT=0x7A3B91D5;
+const mb=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const ksr=(n,l)=>{const r=mb((SEED^Math.imul(n+1,0x9E3779B1))>>>0);return Array.from({length:l},()=>Math.floor(r()*64))};
+const hs=v=>{let h=SALT>>>0;for(const x of v){h=(h^(x+1))>>>0;h=Math.imul(h,16777619)>>>0;h=(h^(h>>>13))>>>0}return h&0xFFFFFF};
+function encodeCode(v){const n=Math.floor(Math.random()*64),h=hs(v),a=v.concat([(h>>18)&63,(h>>12)&63,(h>>6)&63,h&63]),k=ksr(n,a.length);let p=n,o=ALPH[n];for(let i=0;i<a.length;i++){const c=(a[i]+k[i]+p)%64;o+=ALPH[c];p=c}return o}
+function decodeCode(s,len){s=String(s).replace(/\s+/g,"");if(s.length!==len+5)return null;const cs=[...s].map(ch=>ALPH.indexOf(ch));if(cs.some(x=>x<0))return null;const n=cs[0],k=ksr(n,len+4);let p=n;const v=[];for(let i=0;i<len+4;i++){const c=cs[i+1];v.push(((c-k[i]-p)%64+64)%64);p=c}const h=hs(v.slice(0,len));if(((v[len]<<18)|(v[len+1]<<12)|(v[len+2]<<6)|v[len+3])!==h)return null;const vals=v.slice(0,len);if(vals.some(x=>x!==63&&x>=K.length))return null;return vals}
+const $=id=>document.getElementById(id);
+let studs=[],errs=[],cur=-1;
+function cfg(){let s=+$("soglia").value,m=+$("vmin").value;if(!(s>=30&&s<=95))s=60;if(!(m>=0&&m<=6))m=4;return{s,m,r:$("rnd").checked}}
+function vt(p){const{s,m,r}=cfg();let v=p<s?m+(6-m)*p/s:6+4*(p-s)/(100-s);v=Math.max(m,Math.min(10,v));return r?Math.round(v*2)/2:Math.round(v*10)/10}
+const fv=v=>String(v).replace(".",",");
+const setVoti=()=>studs.forEach(s=>s.v=vt(s.raw));
+const avgV=l=>Math.round(l.reduce((n,s)=>n+s.v,0)/l.length*10)/10;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function parse(t){return t.split(/\n/).map(r=>r.trim()).filter(Boolean).map(r=>{const i=r.lastIndexOf("|");const nome=((i>=0?r.slice(0,i):"")||"(senza nome)").trim()||"(senza nome)";const code=(i>=0?r.slice(i+1):r).replace(/\s+/g,"");return{nome,code,nosep:i<0}})}
+function grade(s){
+ if(s.nosep)return{err:"Riga senza il separatore «|» tra nome e codice: «"+s.code.slice(0,22)+"…»"};
+ const vals=decodeCode(s.code,TOT);if(!vals)return{err:"«"+s.nome+"»: codice non valido, incompleto o modificato (controlla di averlo copiato per intero)."};
+ let idx=0,ok=0;const cats={},sents=[];
+ for(const f of SENT){let c=0;const parts=f.p.map(([t,k])=>{const a=vals[idx]===63?null:K[vals[idx]];idx++;const good=a===k;if(good)c++;cats[k]=cats[k]||[0,0];cats[k][1]++;if(good)cats[k][0]++;return{t,k,a,good}});ok+=c;sents.push({n:f.n,corr:c,tot:parts.length,parts})}
+ return{nome:s.nome,ok,tot:TOT,raw:ok/TOT*100,pct:Math.round(ok/TOT*100),sents,cats};
+}
+function correct(){
+ const raw=parse($("in").value);errs=[];studs=[];
+ raw.forEach(r=>{const g=grade(r);if(g.err)errs.push(g.err);else studs.push(g)});
+ studs.sort((a,b)=>a.nome.localeCompare(b.nome,"it"));
+ $("msg").innerHTML=errs.map(esc).join("<br>");
+ renderList();
+}
+function renderList(){
+ setVoti();cur=-1;const box=$("list");$("detail").classList.add("hide");
+ if(!studs.length){box.classList.add("hide");return}
+ box.classList.remove("hide");
+ const avg=Math.round(studs.reduce((n,s)=>n+s.pct,0)/studs.length);
+ const agg={};studs.forEach(s=>Object.entries(s.cats).forEach(([k,[o,t]])=>{agg[k]=agg[k]||[0,0];agg[k][0]+=o;agg[k][1]+=t}));
+ const hard=Object.entries(agg).map(([k,[o,t]])=>({k,pct:Math.round(o/t*100),err:t-o})).filter(x=>x.err>0).sort((a,b)=>a.pct-b.pct).slice(0,8);
+ let h='<h2>Risultati</h2><div class="box"><div class="kpi"><div><b>'+studs.length+'</b>alunni corretti</div><div><b>'+fv(avgV(studs))+'</b>media dei voti</div><div><b>'+avg+'%</b>media delle risposte esatte</div><div><b>'+Math.max(...studs.map(s=>s.pct))+'%</b>risultato migliore</div><div><b>'+Math.min(...studs.map(s=>s.pct))+'%</b>risultato più basso</div></div></div>';
+ h+='<div class="box"><table><tr><th>Alunno</th><th>Corrette</th><th>%</th><th>Voto</th><th></th><th></th></tr>'+studs.map((s,i)=>'<tr><td>'+esc(s.nome)+'</td><td>'+s.ok+' / '+s.tot+'</td><td>'+s.pct+'%</td><td><b>'+fv(s.v)+'</b></td><td><div class="bar"><i style="width:'+s.pct+'%"></i></div></td><td><button class="s" data-i="'+i+'">Vedi la verifica corretta</button></td></tr>').join("")+'</table>';
+ h+='<button id="pdfall">Scarica il PDF di tutta la classe</button><span id="m2" class="err"></span></div>';
+ if(hard.length)h+='<h2>Complementi più sbagliati dalla classe</h2><div class="box"><div class="cats">'+hard.map(x=>'<div><span>'+esc(L[x.k])+'</span><span class="w">'+x.pct+'% corrette · '+x.err+' errori</span></div>').join("")+'</div></div>';
+ box.innerHTML=h;
+ box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>renderDetail(+b.dataset.i));
+ $("pdfall").onclick=()=>savePdf(studs,"verifiche-corrette-classe.pdf",$("m2"));
+}
+function renderDetail(i,ns){
+ setVoti();cur=i;const s=studs[i];$("list").classList.add("hide");const d=$("detail");d.classList.remove("hide");
+ const cats=Object.entries(s.cats).map(([k,[o,t]])=>({k,o,t})).sort((a,b)=>(a.o/a.t)-(b.o/b.t)||a.k.localeCompare(b.k));
+ let h='<div class="noprint"><button class="s" id="back">← Torna all\'elenco</button><button id="pdf1">Scarica il PDF di questa verifica</button><button class="s" id="prt">Stampa</button><span id="m3" class="err"></span></div>';
+ h+='<h2>'+esc(s.nome)+'</h2><div class="box"><div class="kpi"><div><b>'+fv(s.v)+' / 10</b>voto</div><div><b>'+s.ok+' / '+s.tot+'</b>risposte corrette</div><div><b>'+s.pct+'%</b>percentuale</div><div><b>'+(s.tot-s.ok)+'</b>da rivedere</div></div></div>';
+ h+='<div class="box"><b>Per funzione logica</b><div class="cats" style="margin-top:6px">'+cats.map(c=>'<div><span>'+esc(L[c.k])+'</span><span class="'+(c.o<c.t?"w":"")+'">'+c.o+'/'+c.t+'</span></div>').join("")+'</div></div>';
+ h+=s.sents.map(f=>'<div class="card"><h3>Frase '+f.n+' · '+f.corr+'/'+f.tot+'</h3><div class="fr">'+f.parts.map(p=>'<div class="blk '+(p.good?"ok":"ko")+'"><span class="m">'+(p.good?"✓":"✗")+'</span><span class="t">'+esc(p.t)+'</span><span class="a">'+(p.a?esc(L[p.a]):"non risposto")+'</span>'+(p.good?"":'<span class="c">Corretto: '+esc(L[p.k])+'</span>')+'</div>').join("")+'</div></div>').join("");
+ d.innerHTML=h;if(!ns)scrollTo(0,0);
+ $("back").onclick=renderList;$("prt").onclick=()=>window.print();
+ $("pdf1").onclick=()=>savePdf([s],"verifica-corretta-"+s.nome.replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"")+".pdf",$("m3"));
+}
+/* ---------- PDF ---------- */
+function makePdf(list){
+ setVoti();const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"mm",format:"a4"});
+ const G=[30,122,70],R=[179,38,30],INK=[29,36,51],MUT=[91,101,119];
+ let y=18;const X=15,B=282;
+ const ensure=h=>{if(y+h>B){doc.addPage();y=18}};
+ const T=(txt,x,yy,o={})=>{doc.setFont("helvetica",o.b?"bold":"normal");doc.setFontSize(o.s||9);doc.setTextColor(...(o.c||INK));doc.text(txt,x,yy)};
+ if(list.length>1){
+  T("Verifica di analisi logica - riepilogo della classe",X,y,{b:1,s:15});y+=8;
+  T(list.length+" alunni corretti - media dei voti "+fv(avgV(list))+" - media risposte esatte "+Math.round(list.reduce((n,s)=>n+s.pct,0)/list.length)+"%",X,y,{c:MUT,s:10});y+=8;
+  T("Alunno",X,y,{b:1,s:10});T("Corrette",105,y,{b:1,s:10});T("%",132,y,{b:1,s:10});T("Voto",155,y,{b:1,s:10});y+=2;doc.setDrawColor(180);doc.line(X,y,195,y);y+=5;
+  list.forEach(s=>{ensure(7);T(s.nome,X,y,{s:10});T(s.ok+" / "+s.tot,105,y,{s:10});T(s.pct+"%",132,y,{s:10});T(fv(s.v),155,y,{b:1,s:10});y+=6});
+ }
+ list.forEach((s,idx)=>{
+  if(list.length>1||idx>0){doc.addPage();y=18}
+  T("Verifica di analisi logica - corretta",X,y,{b:1,s:15});y+=8;
+  T(s.nome,X,y,{b:1,s:12});y+=7;
+  T("Voto: "+fv(s.v)+" / 10",X,y,{b:1,s:13});y+=6.5;
+  T("Risposte corrette: "+s.ok+" su "+s.tot+" ("+s.pct+"%)",X,y,{s:10});y+=5;
+  T("Scala: sufficienza (6) al "+cfg().s+"% di risposte corrette; voto minimo "+fv(cfg().m)+(cfg().r?"; arrotondato al mezzo punto":""),X,y,{s:8,c:MUT});y+=7;
+  const bad=Object.entries(s.cats).filter(([k,[o,t]])=>o<t).sort((a,b)=>(a[1][0]/a[1][1])-(b[1][0]/b[1][1]));
+  T("Da ripassare:",X,y,{b:1,s:10});y+=5;
+  if(!bad.length){T("Nessun errore: complimenti!",X,y,{c:G,s:9});y+=6}
+  else{bad.forEach(([k,[o,t]],i)=>{const col=i%2,xx=X+col*92;T(L[k]+": "+o+"/"+t,xx,y,{s:9,c:R});if(col===1)y+=4.6});if(bad.length%2===1)y+=4.6;y+=3}
+  s.sents.forEach(f=>{
+   ensure(14);y+=2;T("Frase "+f.n+"   ("+f.corr+"/"+f.tot+")",X,y,{b:1,s:10});y+=1.5;doc.setDrawColor(200);doc.line(X,y,195,y);y+=4;
+   f.parts.forEach(p=>{
+    const c1=doc.splitTextToSize(p.t,48),c2=doc.splitTextToSize("Risposta: "+(p.a?L[p.a]:"non risposto"),60),c3=p.good?["OK"]:doc.splitTextToSize("X  Corretto: "+L[p.k],64);
+    const n=Math.max(c1.length,c2.length,c3.length),h=n*4.2+1.6;ensure(h);
+    if(!p.good){doc.setFillColor(251,233,231);doc.rect(X-1,y-3.6,181,h,"F")}
+    doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...INK);doc.text(c1,X,y);
+    doc.setTextColor(...MUT);doc.text(c2,X+51,y);
+    doc.setFont("helvetica","bold");doc.setTextColor(...(p.good?G:R));doc.text(c3,X+114,y);
+    y+=h;
+   });
+  });
+ });
+ const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);T("Pagina "+i+" di "+n,105,291,{s:8,c:MUT})}
+ return doc.output("arraybuffer");
+}
+async function saveFile(name,buf){
+ let dl=null;try{if(window.claude&&claude.use)dl=await claude.use("downloads")}catch(e){}
+ if(dl){await dl.save({filename:name,data:buf});return}
+ const u=URL.createObjectURL(new Blob([buf],{type:"application/pdf"}));const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
+}
+async function savePdf(list,name,out){
+ out.textContent="";
+ if(!window.jspdf){out.textContent="Il generatore di PDF non si è caricato (serve la connessione a internet). In alternativa usa «Stampa» e scegli «Salva come PDF».";return}
+ try{await saveFile(name,makePdf(list))}catch(e){if(!e||e.code!=="declined")out.textContent="Non sono riuscito a salvare il PDF: "+((e&&e.message)||e)}
+}
+["soglia","vmin","rnd"].forEach(id=>$(id).addEventListener("input",()=>{if(!studs.length)return;if(!$("detail").classList.contains("hide")&&cur>=0)renderDetail(cur,true);else renderList()}));
+$("go").onclick=correct;
+$("clr").onclick=()=>{$("in").value="";$("msg").textContent="";studs=[];$("list").classList.add("hide");$("detail").classList.add("hide")};
+</script></body></html>
